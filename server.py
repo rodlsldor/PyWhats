@@ -33,59 +33,57 @@ class Server:
 
         # La tu check si le nom du client et le mot de passe sont les bons (pour ca maybe fait un fichier qui contient nom d user:mot de passe)
         if self.authentification(client_name,client_password) :
-            client_socket.send("oui".encode("utf-8"))
+            client_socket.send(client_name.encode("utf-8"))
+            self.clients[client_name] = {"socket": client_socket, "messages": []}
+            while True:
+                try:
+                    data = client_socket.recv(1024)
+                    if not data:
+                        break
+
+                    command = data.decode("utf-8")
+                    if command.startswith("/"):
+                        command = command.replace("/","")
+                        if command.startswith("add") or command.startswith("remove") or command.startswith("modify") or command.startswith("request") or command.startswith("get") or command.startswith("confirm") :
+                            self.receive_command(command, client_name)
+                        elif command.startswith("connect"):
+                            status = self.receive_command(command,client_name)
+                            if status :
+                                status = f"{client_name}"+":"+str(status)
+                                self.handle_message(client_name,status,"msg")
+                        elif command.startswith("file"):
+                            command = command.replace("file","")
+                            recipient_name, filename = data.split(':', 2)
+                            recipient_socket_info = self.clients.get(recipient_name, None)
+                            if recipient_socket_info:
+                                # Envoyer le préambule de fichier au destinataire pour qu'il se prépare
+                                recipient_socket = recipient_socket_info["socket"]
+                                recipient_socket.send(data.encode("utf-8"))
+                                
+                                # Réception de la taille du fichier
+                                filesize = int(client_socket.recv(1024).decode("utf-8"))
+                                recipient_socket.send(str(filesize).encode("utf-8"))
+                                # Transfert du fichier
+                                bytes_sent = 0
+                                while bytes_sent < filesize:
+                                    chunk = client_socket.recv(1024)
+                                    recipient_socket.send(chunk)
+                                    bytes_sent += len(chunk)
+                        elif command.startswith("exit"):
+                            break
+                        elif command.startswith("help"):
+                            command = f"{client_name}: "+ self.help_command()
+                            self.handle_message(f"{client_name}", command,"msg")
+                        else:
+                            command= f"{client_name}: Erreur commande"
+                            self.handle_message(f"{client_name}", command,"msg")
+                    else:
+                        self.handle_message(client_name, command,"msg")
+                except ConnectionResetError:
+                    break
         else :
             client_socket.send("nope!".encode("utf-8"))
-            client_socket.close()
-
-        self.clients[client_name] = {"socket": client_socket, "messages": []}
-        while True:
-            try:
-                data = client_socket.recv(1024)
-                if not data:
-                    break
-
-                command = data.decode("utf-8")
-                if command.startswith("/"):
-                    command = command.replace("/","")
-                    if command.startswith("add") or command.startswith("remove") or command.startswith("modify") or command.startswith("request") or command.startswith("get") or command.startswith("confirm") :
-                        self.receive_command(command, client_name)
-                    elif command.startswith("connect"):
-                        status = self.receive_command(command,client_name)
-                        if status :
-                            status = f"{client_name}"+":"+str(status)
-                            self.handle_message(client_name,status,"msg")
-                    elif command.startswith("file"):
-                        command = command.replace("file","")
-                        recipient_name, filename = data.split(':', 2)
-                        recipient_socket_info = self.clients.get(recipient_name, None)
-                        if recipient_socket_info:
-                            # Envoyer le préambule de fichier au destinataire pour qu'il se prépare
-                            recipient_socket = recipient_socket_info["socket"]
-                            recipient_socket.send(data.encode("utf-8"))
-                            
-                            # Réception de la taille du fichier
-                            filesize = int(client_socket.recv(1024).decode("utf-8"))
-                            recipient_socket.send(str(filesize).encode("utf-8"))
-                            # Transfert du fichier
-                            bytes_sent = 0
-                            while bytes_sent < filesize:
-                                chunk = client_socket.recv(1024)
-                                recipient_socket.send(chunk)
-                                bytes_sent += len(chunk)
-                    elif command.startswith("exit"):
-                        break
-                    elif command.startswith("help"):
-                        command = f"{client_name}: "+ self.help_command()
-                        self.handle_message(f"{client_name}", command,"msg")
-                    else:
-                        command= f"{client_name}: Erreur commande"
-                        self.handle_message(f"{client_name}", command,"msg")
-                else:
-                    self.handle_message(client_name, command,"msg")
-            except ConnectionResetError:
-                break
-
+            client_socket.close()          
         print(f"Connexion avec {client_name} fermée.")
         del self.clients[client_name]
         client_socket.close()

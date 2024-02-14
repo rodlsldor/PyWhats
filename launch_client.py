@@ -20,19 +20,17 @@ if __name__ == "__main__":
     client_socket.send(couille.encode('utf-8'))
     time.sleep(1)
     rep = client_socket.recv(1024).decode('utf-8')
+    if rep == username:
+        while rep!="Goodbye" :
+            req = input("Pour envoyer un message tapez 'pseudo':'message'")
+            client_socket.send(req.encode('utf-8'))
+            rep = client_socket.recv(1024).decode('utf-8')
 
-    if (rep == "oui") :
-        print("ID success")
+            #Et la tu fout ton process de requetes
+            print("I received", rep, " UwU")
     else :
         print("couldn't authenticate")
         client_socket.close()
         exit()
     
     
-    while rep!="Goodbye" :
-        req = input("Pour envoyer un message tapez 'pseudo':'message'")
-        client_socket.send(req.encode('utf-8'))
-        rep = client_socket.recv(1024).decode('utf-8')
-
-        #Et la tu fout ton process de requetes
-        print("I received", rep, " UwU")
