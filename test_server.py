@@ -26,17 +26,17 @@ class TestServer(unittest.TestCase):
         # Cette méthode est appelée avant chaque test
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((self.server_address, self.server_port))
-        self.client_socket.send('TestUser'.encode('utf-8'))  # Envoyer un nom d'utilisateur de test au serveur
+        self.client_socket.send('admin:password123'.encode('utf-8'))  # Envoyer un nom d'utilisateur de test au serveur
         time.sleep(1)  # Attendre que le serveur traite la connexion
 
     def test_a_client_communication(self):
         # Test de l'envoi et de la réception de messages
         print("Test commu")
-        test_message = "TestUser: Hello Server!"
+        test_message = "admin: Hello Server!"
         self.client_socket.send(test_message.encode())
         time.sleep(1)
         received_message = self.client_socket.recv(1024).decode()
-        test_message ="TestUser:  Hello Server!"
+        test_message ="admin:  Hello Server!"
         self.assertEqual(test_message, received_message)
         # OK
 
@@ -54,70 +54,74 @@ class TestServer(unittest.TestCase):
     def test_c_command_request_friend(self):
         # OK
         print("\nRequête d'ami")
-        add_friend_command= "/request friend TestUser testuser4"
-        request_friend = "/request friend TestUser testuser7"
+        add_friend_command= "/request friend admin testuser4"
+        request_friend = "/request friend admin testuser7"
         self.client_socket.send(add_friend_command.encode())
         time.sleep(1)
         self.client_socket.send(request_friend.encode())
         time.sleep(1)
-        user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "TestUser.json")
+        user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "admin.json")
         with (open(user_file_path,"r")) as fichierProfile:
             user_data=json.load(fichierProfile)
         self.assertIn("testuser4:0",user_data["demandeAmi"])
         user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "testuser4.json")
         with (open(user_file_path,"r")) as fichierProfile:
             user_data=json.load(fichierProfile)
-        self.assertIn("TestUser:0",user_data["demandeAmi"])
+        self.assertIn("admin:0",user_data["demandeAmi"])
 
 
     def test_da_command_confirm_request(self):
         # OK
         print("\nConfirmation requête :")
-        confirm_request = "/confirm friend TestUser testuser4"
-        confirm_request2 = "/confirm friend testuser4 TestUser"
+        confirm_request = "/confirm friend admin testuser4"
+        confirm_request2 = "/confirm friend testuser4 admin"
         self.client_socket.send(confirm_request.encode())
         time.sleep(1)
         self.client_socket.send(confirm_request2.encode())
         time.sleep(1)
-        user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "TestUser.json")
+        user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "admin.json")
         with (open(user_file_path,"r")) as fichierProfile:
             user_data=json.load(fichierProfile)
         self.assertIn("testuser4",user_data["amis"])
         user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "testuser4.json")
         with (open(user_file_path,"r")) as fichierProfile:
             user_data=json.load(fichierProfile)
-        self.assertIn("TestUser", user_data["amis"])
+        self.assertIn("admin", user_data["amis"])
 
     def test_db_remove_request_fr(self):
         # OK
         print("\nEnlever la demande d'ami")
-        request_ = "/remove request friend TestUser testuser7"
+        request_ = "/remove request friend admin testuser7"
         self.client_socket.send(request_.encode())
         time.sleep(1)
-        user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "TestUser.json")
+        user_file_path = os.path.join(os.path.expanduser("~"), "Documents","PyWhats","Users", "admin.json")
         with (open(user_file_path,"r")) as fichierProfile:
             user_data=json.load(fichierProfile)
         self.assertNotIn("testuser7:0",user_data["demandeAmi"])
 
     def test_f_command_modify_pass(self):
         print("\nModification mdp")
-        user_file_path= os.path.join(os.path.expanduser("~"), "Documents", "PyWhats","Users" ,"TestUser.json")
+        modify_command= "/modify password admin password123 oui"
+        self.client_socket.send(modify_command.encode())
+        time.sleep(1)
+        user_file_path= os.path.join(os.path.expanduser("~"), "Documents", "PyWhats","Users" ,"admin.json")
         with open(user_file_path,"r") as fichierProfile :
             user_data=json.load(fichierProfile)
-        modify_command= "/modify password TestUser TestPassword oui"
+        self.assertTrue(bcrypt.checkpw("oui".encode(),base64.b64decode(user_data["password"])))
+        modify_command= "/modify password admin oui password123"
         self.client_socket.send(modify_command.encode())
         time.sleep(1)
         with open(user_file_path,"r") as fichierProfile :
             user_data=json.load(fichierProfile)
-        self.assertTrue(bcrypt.checkpw("oui".encode(),base64.b64decode(user_data["password"])))
+        self.assertTrue(bcrypt.checkpw("password123".encode(),base64.b64decode(user_data["password"])))
         
     def test_g_command_modify_phone(self):
         #OK
         print("\nModification numero ")
-        modify_command="/modify phoneNumber TestUser 0712121212"
+        modify_command="/modify phoneNumber admin 0712121212"
         self.client_socket.send(modify_command.encode())
         time.sleep(1)
-        user_file_path= os.path.join(os.path.expanduser("~"), "Documents","PyWhats", "Users" ,"TestUser.json")
+        user_file_path= os.path.join(os.path.expanduser("~"), "Documents","PyWhats", "Users" ,"admin.json")
         with open(user_file_path,"r") as fichierProfile:
             user_data=json.load(fichierProfile)
         self.assertTrue("0712121212" == user_data["phoneNumber"])
@@ -134,35 +138,17 @@ class TestServer(unittest.TestCase):
     def test_dc_command_remove_friend(self):
         # OK
         print("\nEnlevement ami")
-        message = "/remove friend TestUser testuser4"
+        message = "/remove friend admin testuser4"
         self.client_socket.send(message.encode())
         time.sleep(1)
-        user_file_path= os.path.join(os.path.expanduser("~"), "Documents", "PyWhats", "Users", "TestUser.json")
+        user_file_path= os.path.join(os.path.expanduser("~"), "Documents", "PyWhats", "Users", "admin.json")
         with open(user_file_path,"r") as fichierProfile:
             user_data=json.load(fichierProfile)
         self.assertNotIn("testuser4",user_data["amis"])
 
-    def test_i_command_authentification(self):
-        print("\nTest de connexion")
-        message = "/connect testuser4 password123"
-        self.client_socket.send(message.encode())
-        time.sleep(1)
-        response = self.client_socket.recv(1024).decode()
-        if "True" in response :
-            self.client_socket.close()
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect((self.server_address, self.server_port))
-            self.client_socket.send('testuser4'.encode('utf-8'))
-            time.sleep(1)
-            self.client_socket.send("testuser4: coucou fdp".encode('utf-8'))
-            time.sleep(1)
-            response = self.client_socket.recv(1024).decode()
-            self.assertIn("fdp",response)
-
-
     def test_j_command_remove_usr(self):
         print("\nEnlever utilisateur")
-        message = "/remove user TestUser"
+        message = "/remove user TestUser admin"
         self.client_socket.send(message.encode())
         time.sleep(1)
         user_file_path= os.path.join(os.path.expanduser("~"), "Documents", "PyWhats", "Users", "TestUser.json")

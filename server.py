@@ -30,8 +30,6 @@ class Server:
         client_data = client_socket.recv(1024).decode("utf-8")
         client_name = client_data.split(':')[0]
         client_password = client_data.split(':')[1]
-
-        # La tu check si le nom du client et le mot de passe sont les bons (pour ca maybe fait un fichier qui contient nom d user:mot de passe)
         if self.authentification(client_name,client_password) :
             client_socket.send(client_name.encode("utf-8"))
             self.clients[client_name] = {"socket": client_socket, "messages": []}
@@ -46,80 +44,64 @@ class Server:
                         command = command.replace("/","")
                         if command.startswith("add") or command.startswith("remove") or command.startswith("modify") or command.startswith("request") or command.startswith("get") or command.startswith("confirm") :
                             self.receive_command(command, client_name)
-                        elif command.startswith("connect"):
-                            status = self.receive_command(command,client_name)
-                            if status :
-                                status = f"{client_name}"+":"+str(status)
-                                self.handle_message(client_name,status,"msg")
                         elif command.startswith("file"):
-                            command = command.replace("file","")
-                            recipient_name, filename = data.split(':', 2)
-                            recipient_socket_info = self.clients.get(recipient_name, None)
-                            if recipient_socket_info:
-                                # Envoyer le préambule de fichier au destinataire pour qu'il se prépare
-                                recipient_socket = recipient_socket_info["socket"]
-                                recipient_socket.send(data.encode("utf-8"))
-                                
-                                # Réception de la taille du fichier
-                                filesize = int(client_socket.recv(1024).decode("utf-8"))
-                                recipient_socket.send(str(filesize).encode("utf-8"))
-                                # Transfert du fichier
-                                bytes_sent = 0
-                                while bytes_sent < filesize:
-                                    chunk = client_socket.recv(1024)
-                                    recipient_socket.send(chunk)
-                                    bytes_sent += len(chunk)
+                            self.handle_file_transfer(client_socket,command)
                         elif command.startswith("exit"):
                             break
                         elif command.startswith("help"):
                             command = f"{client_name}: "+ self.help_command()
-                            self.handle_message(f"{client_name}", command,"msg")
+                            self.handle_message(f"{client_name}", command)
                         else:
                             command= f"{client_name}: Erreur commande"
-                            self.handle_message(f"{client_name}", command,"msg")
+                            self.handle_message(f"{client_name}", command)
                     else:
-                        self.handle_message(client_name, command,"msg")
+                        self.handle_message(client_name, command)
                 except ConnectionResetError:
                     break
         else :
             client_socket.send("nope!".encode("utf-8"))
             client_socket.close()          
         print(f"Connexion avec {client_name} fermée.")
-        del self.clients[client_name]
+        if f"{client_name}" in self.clients:
+            del self.clients[client_name]
         client_socket.close()
 
-    # def receive_file(self, sender_name, command):
-    #     recipient_name, file_info = command.split(":", 2)
-    #     recipient_socket = self.clients.get(recipient_name, None)
-
-    #     if recipient_socket:
-    #         filename, file_data = file_info.split(":", 1)
-    #         with open(filename, 'wb') as file:
-    #             file.write(file_data.encode("utf-8"))
-
-    def handle_message(self, sender_name, message,type):
+    def handle_message(self, sender_name, message):
         # Vérifier si le message contient le caractère ':', qui sépare le nom du destinataire et le message
         if ':' in message:
             recipient_name, message_content = message.split(':', 1)
             recipient_socket = self.clients.get(recipient_name, None)
             if recipient_socket:
-                if type == "msg":
-                    # Si le destinataire existe, envoyer le message
-                    recipient_socket["socket"].send(f"{sender_name}: {message_content}".encode("utf-8"))
-                    self.clients[recipient_name]["messages"].append(f"{sender_name}: {message_content}")
-                    msg.comm_save(f"{sender_name}",f"{recipient_name}", f"{sender_name}"+":"+message_content+"\n")
-                elif type == "file":
-                    filename = message_content
-                    # Signaler au destinataire qu'un fichier va être reçu
-                    recipient_socket["socket"].send(f"file:{sender_name}:{filename}".encode("utf-8"))
-                    msg.comm_save(f"{sender_name}",f"{recipient_name}",f"{sender_name}"+":"+message_content+"\n")
+                # Si le destinataire existe, envoyer le message
+                recipient_socket["socket"].send(f"{sender_name}: {message_content}".encode("utf-8"))
+                self.clients[recipient_name]["messages"].append(f"{sender_name}: {message_content}")
+                msg.comm_save(f"{sender_name}",f"{recipient_name}", f"{sender_name}"+":"+message_content+"\n")
             else:
                 # Si le destinataire n'existe pas, informer l'expéditeur
                 self.clients[sender_name]["socket"].send("Destinataire non trouvé.".encode("utf-8"))
         else:
             # Si le message ne suit pas le format attendu, informer l'expéditeur
-            self.clients[sender_name]["socket"].send("Format de message invalide. Utilisez 'recipient:message'.".encode("utf-8"))
+            self.clients[sender_name]["socket"].send("Format de message invalide. Utilisez '@recipient:message'.".encode("utf-8"))
 
+
+    def handle_file_transfer(self, client_socket, command):
+        # Extrait les informations nécessaires de la commande
+        _, recipient_name, filename, filesize = command.split(';', 4)
+        filesize = int(filesize)
+        recipient_socket_info = self.clients.get(recipient_name, None)
+        print(recipient_socket_info)
+        if recipient_socket_info:
+            recipient_socket = recipient_socket_info["socket"]
+            # Envoyer les métadonnées de fichier au destinataire
+            file_metadata = f"file:{filename}:{filesize}"
+            recipient_socket.send(file_metadata.encode("utf-8"))
+            
+            # Commencez à transférer le fichier
+            bytes_sent = 0
+            while bytes_sent < filesize:
+                chunk = client_socket.recv(1024)
+                recipient_socket.send(chunk)
+                bytes_sent += len(chunk)
 
     def broadcast(self, message, sender_socket):
         for client in self.clients.values():
@@ -177,7 +159,7 @@ class Server:
             return user.addUser(*command_parts[2:])
         
         command= f"{username}: Erreur commande"
-        self.handle_message(f"{username}", command,"msg")
+        self.handle_message(f"{username}", command)
 
     def get_command(self,command_parts,username):
         if command_parts[1] == "friends" :
@@ -191,20 +173,20 @@ class Server:
             else:
                 return user.getUserInfo(command_parts[2])
         command= f"{username}: Erreur commande"
-        self.handle_message(f"{username}", command,"msg")
+        self.handle_message(f"{username}", command)
 
     def remove_command(self, command_parts, username):
         if command_parts[1] == "friend":
             return user.enleverAmi(command_parts[2], command_parts[3])
         elif command_parts[1] == "user":
-            if command_parts[2] == f"{username}":
+            if command_parts[2] == f"{username}" or command_parts[3] == "admin" :
                 return user.removeUser(command_parts[2])
         elif command_parts[1] == "request":
             if command_parts[2] == "friend":
                 if command_parts[3] == username :
                     user.enleverDemandeAmi(username, command_parts[4])
         command= f"{username}: Erreur commande"
-        self.handle_message(f"{username}", command,"msg")
+        self.handle_message(f"{username}", command)
 
     def modify_command(self, command_parts,username):
         field = command_parts[1]
@@ -215,21 +197,21 @@ class Server:
             if command_parts[2] == username:
                 return user.modifierPhoneNumber(username, command_parts[3])
         command= f"{username}: Erreur commande"
-        self.handle_message(f"{username}", command,"msg")
+        self.handle_message(f"{username}", command)
         
     def request_command(self, command_parts, username):
         field = command_parts[1]
         if field == "friend" :
             return user.requestFriend(username, command_parts[3])
         command= f"{username}: Erreur commande"
-        self.handle_message(f"{username}", command,"msg")
+        self.handle_message(f"{username}", command)
     
     def confirm_command(self,command_parts,username):
         field = command_parts[1]
         if field == "friend" :
             return user.confirmRequestFriend(command_parts[2], command_parts[3])
         command= f"{username}: Erreur commande"
-        self.handle_message(f"{username}", command,"msg")
+        self.handle_message(f"{username}", command)
 
     def authentification(self,username,password): 
         if not user.checkExistingUser(username) :
@@ -248,14 +230,3 @@ class Server:
         except IOError as e:
             print("Erreur de connexion : {e}")
             return False 
-
-    # def modify_profile(self, client_name, new_name):
-    #     self.clients[new_name] = {"socket": self.clients[client_name]["socket"], "messages": []}
-    #     del self.clients[client_name]
-
-    # def create_backup(self, client_name, backup_file):
-    #     with open(f'{backup_file}.txt', 'a') as file:
-    #         file.write(f"--- Backup for {client_name} ---\n")
-    #         for message in self.clients[client_name]["messages"]:
-    #             file.write(message + '\n')
-
