@@ -13,13 +13,10 @@ def listen_for_messages(client_socket):
         try:
             header = client_socket.recv(1024).decode('utf-8')
             if header.startswith("file:"):
-                print("yes0")
                 command,recipient_name, filename, filesize = header.split(':')
-                print("yes1")
                 filesize = int(filesize)
-                save_path = os.path.join(save_path_dir, filename)
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                client_socket.send("OK".encode())
+                save_path = os.path.join(save_path_dir,recipient_name, filename)
+                os.makedirs(os.path.join(os.path.dirname(save_path)), exist_ok=True)
                 time.sleep(1)
                 with open(save_path, 'wb') as file:
                     bytes_received = 0
@@ -79,7 +76,6 @@ if __name__ == "__main__":
                 if file_path:
                     filesize = os.path.getsize(file_path)
                     command = f"/file;{recipient};{os.path.basename(file_path)};{filesize}"
-                    print(command)
                     client_socket.send(command.encode('utf-8'))
                     time.sleep(1)
                     send_file_content(client_socket, file_path)

@@ -1,13 +1,9 @@
-from ast import mod
 import base64
-from email import message, message_from_binary_file
 import unittest
 import socket
-import threading
 import time
 import json
 import os
-from urllib import request, response
 
 import bcrypt
 
@@ -15,19 +11,18 @@ from user import user_file_path
 
 class TestServer(unittest.TestCase):
     server_address = '127.0.0.1'
-    server_port = 12345  # Assurez-vous que le serveur est lancé sur ce port
+    server_port = 12345
 
     @classmethod
     def setUpClass(cls):
-        # Lancer le serveur dans un thread séparé si nécessaire
         pass
 
     def setUp(self):
         # Cette méthode est appelée avant chaque test
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((self.server_address, self.server_port))
-        self.client_socket.send('admin:password123'.encode('utf-8'))  # Envoyer un nom d'utilisateur de test au serveur
-        time.sleep(1)  # Attendre que le serveur traite la connexion
+        self.client_socket.send('admin:password123'.encode('utf-8'))
+        time.sleep(1)
 
     def test_a_client_communication(self):
         # Test de l'envoi et de la réception de messages
@@ -41,12 +36,10 @@ class TestServer(unittest.TestCase):
         # OK
 
     def test_b_command_add_usr(self):
-        # Test des commandes de gestion d'utilisateur
         print("\najout utilisateur")
         add_user_command = "/add user camilo jahsh TestUser TestPassword 0612315612"
         self.client_socket.send(add_user_command.encode())
-        time.sleep(1)  # Attendre la réponse du serveur
-        # Vérifier l'existence du fichier utilisateur
+        time.sleep(1)
         user_file_path = os.path.join(os.path.expanduser("~"), "Documents", "PyWhats" ,"Users","TestUser.json")
         self.assertTrue(os.path.exists(user_file_path))
         # OK
@@ -156,12 +149,11 @@ class TestServer(unittest.TestCase):
 
     def test_z_error_handling(self):
         print("\nTest erreur")
-        # Test de la gestion des erreurs pour une commande invalide
         invalid_command = "/invalid_command"
         self.client_socket.send(invalid_command.encode())
         time.sleep(1)
         response = self.client_socket.recv(1024).decode()
-        self.assertIn("Erreur", response)  # Supposer que le serveur répond avec "Erreur" pour une commande invalide
+        self.assertIn("Erreur", response)
 
     def tearDown(self):
         # Fermeture de la connexion client
