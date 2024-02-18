@@ -1,6 +1,7 @@
 import socket
 import threading
 import os
+from time import sleep
 import bcrypt
 import base64
 import json
@@ -85,23 +86,30 @@ class Server:
 
 
     def handle_file_transfer(self, client_socket, command):
-        # Extrait les informations nécessaires de la commande
-        _, recipient_name, filename, filesize = command.split(';', 4)
-        filesize = int(filesize)
-        recipient_socket_info = self.clients.get(recipient_name, None)
-        print(recipient_socket_info)
-        if recipient_socket_info:
-            recipient_socket = recipient_socket_info["socket"]
-            # Envoyer les métadonnées de fichier au destinataire
-            file_metadata = f"file:{filename}:{filesize}"
-            recipient_socket.send(file_metadata.encode("utf-8"))
-            
-            # Commencez à transférer le fichier
-            bytes_sent = 0
-            while bytes_sent < filesize:
-                chunk = client_socket.recv(1024)
-                recipient_socket.send(chunk)
-                bytes_sent += len(chunk)
+        try:
+            _, recipient_name, filename, filesize = command.split(';', 3)
+            filesize = int(filesize)
+            recipient_socket_info = self.clients.get(recipient_name, None)
+
+            if recipient_socket_info:
+                recipient_socket = recipient_socket_info["socket"]
+                # Envoyer les métadonnées de fichier au destinataire
+                file_metadata = f"file:{recipient_name}:{filename}:{filesize}"
+                recipient_socket.send(file_metadata.encode("utf-8"))
+                
+                # Envoyer une confirmation au client émetteur que le destinataire est prêt
+                client_socket.send("OK".encode("utf-8"))
+                
+                # Commencer à recevoir le fichier du client émetteur et le transférer au destinataire
+                bytes_remaining = filesize
+                while bytes_remaining > 0:
+                    chunk = client_socket.recv(min(1024, bytes_remaining))
+                    recipient_socket.send(chunk)
+                    bytes_remaining -= len(chunk)
+                print(f"Fichier {filename} transféré de {client_socket.getpeername()} à {recipient_name}")
+        except Exception as e:
+            print(f"Erreur lors du transfert de fichier : {e}")
+            client_socket.send(f"Erreur lors du transfert de fichier : {e}".encode("utf-8"))
 
     def broadcast(self, message, sender_socket):
         for client in self.clients.values():

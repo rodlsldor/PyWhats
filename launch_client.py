@@ -13,22 +13,20 @@ def listen_for_messages(client_socket):
         try:
             header = client_socket.recv(1024).decode('utf-8')
             if header.startswith("file:"):
-                # Extrait les informations du fichier
-                _, filename, filesize = header.split(':')
+                print("yes0")
+                command,recipient_name, filename, filesize = header.split(':')
                 print("yes1")
                 filesize = int(filesize)
-                # Prépare le chemin de sauvegarde
                 save_path = os.path.join(save_path_dir, filename)
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 client_socket.send("OK".encode())
                 time.sleep(1)
-                # Commence à recevoir le fichier
                 with open(save_path, 'wb') as file:
                     bytes_received = 0
                     while bytes_received < filesize:
                         chunk = client_socket.recv(1024)
                         if not chunk:
-                            break  # Connexion fermée
+                            break
                         file.write(chunk)
                         bytes_received += len(chunk)
                 print(f"\nFichier reçu et sauvegardé dans : {save_path}")
@@ -38,6 +36,14 @@ def listen_for_messages(client_socket):
             print("Une erreur est survenue lors de la réception d'un message.")
             print(e)
             break
+
+def send_file_content(client_socket, file_path):
+    with open(file_path, 'rb') as file:
+        while True:
+            bytes_read = file.read(1024)
+            if not bytes_read:
+                break
+            client_socket.sendall(bytes_read)
 
 if __name__ == "__main__":
     
@@ -56,6 +62,7 @@ if __name__ == "__main__":
     client_socket.send(logins.encode('utf-8'))
     time.sleep(1)
     rep = client_socket.recv(1024).decode('utf-8')
+
     if rep == username:
         listening_thread = threading.Thread(target=listen_for_messages, args=(client_socket,))
         listening_thread.daemon = True
@@ -64,22 +71,25 @@ if __name__ == "__main__":
             req = input("Votre message (pseudo_destinataire:votre_message. Si c'est un fichier, remplacez ':' par ';'.): \n")
             if req.lower() == '**exit**': 
                 break
-            if req.startswith("/file"):
-                tmp = req.split(";")
+            if "/file" in req:
+                file_cmd,recipient = req.split(";")
                 root = tk.Tk()
                 root.withdraw()
-                filename = filedialog.askopenfilename()
-                tmp.append(filename)
-                print(tmp)
-                filesize = os.path.getsize(tmp[2])
-                tmp.append(str(filesize))
-                req = ";".join(tmp)
-            print(req)
-            client_socket.send(req.encode('utf-8'))
-            time.sleep(1)
+                file_path = filedialog.askopenfilename()
+                if file_path:
+                    filesize = os.path.getsize(file_path)
+                    command = f"/file;{recipient};{os.path.basename(file_path)};{filesize}"
+                    print(command)
+                    client_socket.send(command.encode('utf-8'))
+                    time.sleep(1)
+                    send_file_content(client_socket, file_path)
+                    print("Fichier envoyé avec succès.")
+                else:
+                    print("Aucun fichier sélectionné.")
+            else:
+                client_socket.send(req.encode('utf-8'))
+
     else :
         print("couldn't authenticate")
         client_socket.close()
         exit()
-    
-    
